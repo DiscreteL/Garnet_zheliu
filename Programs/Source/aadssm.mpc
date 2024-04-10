@@ -1,0 +1,186 @@
+import pandas as pd
+import nn as nn
+from tensor import Tensor,autograd_function
+import torch
+import optimizer as optim
+import dataloader as dataloader
+import functional as F
+from tensor import boardcasted_multiarray_mul 
+import numpy as np
+
+num_users = 6040
+num_movies = 3706
+num_genders = 2
+num_ages = 7
+num_occupations = 21
+num_genres = 18
+
+def one_hot_encoding(input, num_classes=16):
+    num_samples = input.size(0) #怎么取Tensor第一维的size
+    encoded_tensor = Tensor.zeros([num_samples, num_classes]) #zero用法对吗
+
+    for i in range(num_samples):
+        value = input.value[i] #是个Array
+        encoded_tensor.value[i][value] = 1
+
+    return encoded_tensor
+
+
+class DoubleTowerModel(nn.Module):
+    def __init__(self, num_users, num_genders, num_ages, num_occupations, num_movies, num_genres):
+        super(DoubleTowerModel, self).__init__()
+
+        # user 塔
+        self.user_embedding = nn.Linear(1, 100)
+        self.gender_embedding = nn.Linear(num_genders, 2)
+        self.age_embedding = nn.Linear(num_ages, 2)
+        self.occupation_embedding = nn.Linear(num_occupations, 2)
+        self.user_dense1 = nn.Sequential(
+            nn.Linear(106, 32),
+            nn.ReLU()
+        )
+        self.user_dense2 = nn.Sequential(
+            nn.Linear(32, 8),
+            nn.ReLU()
+        )
+        # item 塔
+        self.movie_embedding = nn.Linear(1, 100)
+        self.genre_embedding = nn.Linear(num_genres, 2)
+        
+        self.movie_dense1 = nn.Sequential(
+            nn.Linear(102, 32),
+            nn.ReLU()
+        )
+        self.movie_dense2 = nn.Sequential(
+            nn.Linear(32, 8),
+            nn.ReLU()
+        )
+
+        # Output
+        self.output = nn.Sequential(
+            nn.Linear(1, 1),
+            nn.Sigmoid()
+        )
+            
+
+    def forward(self, user_id, gender, age, occupation, movie_id, genre):
+        user_embeddings = self.user_embedding(user_id.unsqueeze(1)) 
+        gender_embeddings = self.gender_embedding(gender)
+        age_embeddings = self.age_embedding(age)
+        occupation_embeddings = self.occupation_embedding(occupation)
+
+        user_vector1 = user_embeddings.concat(gender_embeddings, dim=1)
+        user_vector2 = user_vector1.concat(age_embeddings, dim=1)
+        user_vector = user_vector2.concat(occupation_embeddings, dim=1)
+
+        user_vector = self.user_dense1(user_vector)
+        user_vector = self.user_dense2(user_vector)
+
+        movie_embeddings = self.movie_embedding(movie_id)
+        genre_embeddings = self.genre_embedding(genre)
+
+        movie_vector = movie_embeddings.concat(genre_embeddings, dim=1)
+        movie_vector = self.movie_dense1(movie_vector)
+        movie_vector = self.movie_dense2(movie_vector)
+
+        # (32,8) x (8,32) = (32,32)，只取对角线的结果
+        dot_user_movie = user_vector.matmul(movie_vector.transpose()) / 0.2
+  
+        diagonal_elements = Tensor([32,])
+        for i in range(32):
+            diagonal_elements[i] = dot_user_movie.value[i][i]
+
+        dot_user_movie = diagonal_elements.unsqueeze(1)
+        output = self.output(dot_user_movie)
+        return output
+
+
+# aaaa = MultiArray([1],cint)
+# bbbb = Tensor(aaaa)
+# print(aaaa)
+# print(bbbb)
+
+# ['UserID_idx', 'Gender_idx', 'Age_idx', 'Occupation_idx', 'MovieID_idx', 'Genres_idx', 'Rating']
+# x = MultiArray([1000209,6], sfix) 250054
+# x_train = MultiArray([100,50], sfix)
+x_train = sfix.Tensor([750156,50])
+y_train = sfix.Tensor([750156,1])
+x_train.input_from(0)
+y_train.input_from(1)
+
+# x_test = MultiArray([100,50], sfix)
+# y_test = MultiArray([100,1], sfix)
+# x_test.input_from(0)
+# y_test.input_from(1)
+
+# diagonal_elements = Tensor([3,4,5])
+# diagonal_elements[0][0][2]=sfix(5)
+# print(diagonal_elements.value[0][0][2])
+
+
+model = DoubleTowerModel(num_users, num_genders, num_ages, num_occupations, num_movies, num_genres)
+
+criterion = nn.MSELoss()
+optimizer = optim.SGD(model.parameters(), lr = 0.01)
+
+train_load = dataloader.DataLoader(x_train, y_train, batch_size=32, shuffle=True) # 输入的x，y是MultiArray
+batch_number = train_load.size//train_load.batch_size
+
+num_epochs = 5
+@for_range(num_epochs)
+def f(epoch):
+    model.train()
+    @for_range(batch_number)
+    def f(i):
+        inputs, label = train_load.get_data(i) # 得到的inputs、label是Tensor类型
+        # print(inputs.shape)
+        optimizer.zero_grad()
+        user_id = inputs[:,0]
+        gender = inputs[:,1:1+num_genders]
+        age = inputs[:,1+num_genders:1+num_genders+num_ages]
+        occupation = inputs[:,1+num_genders+num_ages:1+num_genders+num_ages+num_occupations]
+        movie_id = inputs[:,1+num_genders+num_ages+num_occupations:1+num_genders+num_ages+num_occupations+1]
+        genre = inputs[:,1+num_genders+num_ages+num_occupations+1:1+num_genders+num_ages+num_occupations+1+num_genres]
+        
+        outputs = model(user_id, gender, age, occupation, movie_id, genre) 
+        loss = criterion(outputs, label)
+        print_ln("-----------loss:-------------")
+        loss.print_reveal_nested()
+        loss.backward()
+        optimizer.step()
+
+# Evaluate on training data
+# model.eval()
+
+
+x_train = Tensor(x_train)
+y_train = Tensor(y_train)
+user_id1 = x_train[:,0]
+gender1 = x_train[:,1:1+num_genders]
+age1 = x_train[:,1+num_genders:1+num_genders+num_ages]
+occupation1 = x_train[:,1+num_genders+num_ages:1+num_genders+num_ages+num_occupations]
+movie_id1 = x_train[:,1+num_genders+num_ages+num_occupations:1+num_genders+num_ages+num_occupations+1]
+genre1 = x_train[:,1+num_genders+num_ages+num_occupations+1:1+num_genders+num_ages+num_occupations+1+num_genres]
+
+with torch.no_grad():
+    train_pre = model(user_id1, gender1, age1, occupation1, movie_id1, genre1) 
+mse = criterion(train_pre, y_train) 
+print_ln('Train MSE:')
+mse.print_reveal_nested()
+print_ln('-----------------------------')
+
+
+# Evaluate on testing data
+
+# user_id1 = x_test[:,0]
+# gender1 = x_test[:,1:1+num_genders]
+# age1 = x_test[:,1+num_genders:1+num_genders+num_ages]
+# occupation1 = x_test[:,1+num_genders+num_ages:1+num_genders+num_ages+num_occupations]
+# movie_id1 = x_test[:,1+num_genders+num_ages+num_occupations:1+num_genders+num_ages+num_occupations+1]
+# genre1 = x_test[:,1+num_genders+num_ages+num_occupations+1:1+num_genders+num_ages+num_occupations+1+num_genres]
+
+# train_pre = model(user_id1, gender1, age1, occupation1, movie_id1, genre1) 
+# mse = criterion(predictions_tensor, y_test)
+# print_ln('Train MSE:')
+# loss.print_reveal_nested()
+# print_ln('-----------------------------')

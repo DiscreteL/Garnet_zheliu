@@ -109,6 +109,7 @@ class ABY3(Cost): #done
         "matmuls": lambda bit_length, kappa_s , kapaa, precision, n_parties, p ,q, r: (p*r*bit_length*3, 1, 0, 0),
         "TruncPr": lambda bit_length, kappa_s , kapaa, precision, n_parties: (bit_length, 1, 0, 0),
         "LTZ": lambda bit_length, kappa_s , kapaa, precision, n_parties: (bit_length*9, math.log2(bit_length)+2, 0, 0),
+        "ands":lambda bit_length, kappa_s , kapaa, precision, n_parties: (3, 1, 0, 0)
    }
         # "trunc": lambda bit_length, kappa_s , kapaa, precision, n_parties: (bit_length, 1, 0, 0),
         # "bit_share":lambda bit_length, kappa_s , kapaa, precision, n_parties: (3, 1, 0, 0),

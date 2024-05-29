@@ -1,0 +1,52 @@
+import nn as nn
+from tensor import Tensor
+import optimizer as optim
+import dataloader as dataloader
+import functional as F
+program.use_trunc_pr = True
+
+class SimpleClassifier(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(SimpleClassifier, self).__init__()
+        # self.fc1 = nn.Linear(input_size, hidden_size)
+        # self.fc2 = nn.Linear(hidden_size, hidden_size)
+        # self.fc3 = nn.Linear(hidden_size, hidden_size)
+        # self.fc4 = nn.Linear(hidden_size, output_size)
+        self.fc4 = nn.Linear(input_size, output_size)
+        # self.relu = nn.ReLU()
+
+    def forward(self, x):
+        # x = self.fc1(x)
+        # x = self.relu(x)
+        # x = self.fc2(x)
+        # x = self.relu(x)
+        # x = self.fc3(x)
+        # x = self.relu(x)
+        x = self.fc4(x)
+        x = F.sigmoid(x)
+        return x
+
+x = Tensor([30, 28 * 28]).get_input_from(0)
+y = Tensor([30, 2]).get_input_from(0)
+dataloader = dataloader.DataLoader(x, y, batch_size = 1)
+
+input_size = 28 * 28  # 图像展平后的特征数
+hidden_size = 1024
+output_size = 2  # 二分类任务，输出一个标量
+model = SimpleClassifier(input_size, hidden_size, output_size)
+optimizer = optim.SGD(model.parameters(), lr = 0.01)
+
+criterion = nn.CrossEntropyLoss()
+
+model.train()
+start_profiling()
+@for_range(1)
+def _(i):
+    input, label = dataloader[i]
+    optimizer.zero_grad()
+    output = model(input)
+    loss = criterion(output, label)
+    loss.backward()
+    loss.print_reveal_nested()
+    optimizer.step()
+stop_profiling()
